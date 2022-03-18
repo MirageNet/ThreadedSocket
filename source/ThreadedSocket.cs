@@ -10,8 +10,9 @@ namespace Mirage.ThreadedSocket
     {
         readonly ISocket _socket;
         readonly int maxPacketSize;
-        readonly ConcurrentBuffer _receiveBuffer;
-        readonly ConcurrentBuffer _bufferPool;
+        readonly ConcurrentBuffer<Packet> _receiveBuffer;
+        /// <summary>Pool for packets that have been dequeued from receive buffer</summary>
+        readonly ConcurrentBuffer<Packet> _bufferPool;
         Thread _receiveThread;
         volatile bool closed;
 
@@ -21,8 +22,8 @@ namespace Mirage.ThreadedSocket
         {
             _socket = socket;
             this.maxPacketSize = maxPacketSize;
-            _receiveBuffer = new ConcurrentBuffer(bufferSize);
-            _bufferPool = new ConcurrentBuffer(bufferSize);
+            _receiveBuffer = new ConcurrentBuffer<Packet>(bufferSize);
+            _bufferPool = new ConcurrentBuffer<Packet>(bufferSize);
         }
 
         public void Bind(IEndPoint endPoint)
@@ -58,10 +59,11 @@ namespace Mirage.ThreadedSocket
         {
             if (closed) throw new InvalidOperationException("Socket Closed");
 
-            bool hasPacket = _receiveBuffer.TryDequeue(out object nextObj);
-            if (hasPacket)
-                next = (Packet)nextObj;
-            return hasPacket;
+#if UNITY_ASSERTIONS
+            // todo maybe just return true if next is not null?
+            Debug.Assert(next == null, "Should not be calling poll while Next is not null");
+#endif
+            return _receiveBuffer.TryDequeue(out next);
         }
 
         public int Receive(byte[] buffer, out IEndPoint endPoint)
@@ -73,7 +75,7 @@ namespace Mirage.ThreadedSocket
             Buffer.BlockCopy(next.buffer, 0, buffer, 0, size);
 
             // recycle buffer, if Try fails just leave buffer for GC
-            _bufferPool.TryEnqueue(next.buffer);
+            _bufferPool.TryEnqueue(next);
 
             // clear reference, next will be set again by poll
             next = null;
@@ -106,29 +108,23 @@ namespace Mirage.ThreadedSocket
 
         void ReceiveOne()
         {
-            bool hasBuffer = _bufferPool.TryDequeue(out object objBuffer);
-            byte[] buffer;
-            if (hasBuffer)
-                buffer = (byte[])objBuffer;
-            else
-                buffer = new byte[maxPacketSize];
+            bool hasBuffer = _bufferPool.TryDequeue(out Packet packet);
+            if (!hasBuffer)
+                packet = new Packet(maxPacketSize);
 
-            int size = _socket.Receive(buffer, out IEndPoint endPoint);
+            packet.size = _socket.Receive(packet.buffer, out IEndPoint endPoint);
 #if UNITY_ASSERTIONS
-            Debug.Assert(size > 0, "Size must be non-negative");
+            Debug.Assert(packet.size > 0, "Size must be non-negative");
 #endif
-            var packet = new Packet
-            {
-                buffer = buffer,
-                size = size,
-                // have to create copy so that endPoint returned from will be reused
-                // todo stop allocation
-                endPoint = endPoint.CreateCopy(),
-            };
+            packet.endPoint = endPoint.CreateCopy();
 
             if (!_receiveBuffer.TryEnqueue(packet))
             {
+#if DEBUG
+                // todo dont always log here, it will cause performnace problems if buffer max is reached
                 Debug.LogWarning("Receive buffer full, increase buffer size to avoid packet loss");
+#endif
+
                 // block thread till receive buffer has space
                 _receiveBuffer.Enqueue(packet);
             }
@@ -136,9 +132,14 @@ namespace Mirage.ThreadedSocket
 
         class Packet
         {
-            public byte[] buffer;
+            public readonly byte[] buffer;
             public int size;
             public IEndPoint endPoint;
+
+            public Packet(int maxPacketSize)
+            {
+                buffer = new byte[maxPacketSize];
+            }
         }
     }
 }

@@ -9,7 +9,7 @@ using System.Threading;
 namespace NetStack.Threading
 {
     [StructLayout(LayoutKind.Explicit, Size = 192)]
-    public sealed class ConcurrentBuffer
+    public sealed class ConcurrentBuffer<T> where T : class // where class so that size of T will always be 8 bytes (pointer to class)
     {
         [FieldOffset(0)]
         private readonly Cell[] _buffer;
@@ -48,7 +48,7 @@ namespace NetStack.Threading
             _dequeuePosition = 0;
         }
 
-        public void Enqueue(object item)
+        public void Enqueue(T item)
         {
             while (true)
             {
@@ -59,7 +59,7 @@ namespace NetStack.Threading
             }
         }
 
-        public bool TryEnqueue(object item)
+        public bool TryEnqueue(T item)
         {
             do
             {
@@ -89,18 +89,18 @@ namespace NetStack.Threading
             while (true);
         }
 
-        public object Dequeue()
+        public T Dequeue()
         {
             while (true)
             {
-                object element;
+                T element;
 
                 if (TryDequeue(out element))
                     return element;
             }
         }
 
-        public bool TryDequeue(out object result)
+        public bool TryDequeue(out T result)
         {
             do
             {
@@ -127,7 +127,7 @@ namespace NetStack.Threading
 
                 if (cell.Sequence < position + 1)
                 {
-                    result = default(object);
+                    result = null;
 
                     return false;
                 }
@@ -142,9 +142,9 @@ namespace NetStack.Threading
             [FieldOffset(0)]
             public int Sequence;
             [FieldOffset(8)]
-            public object Element;
+            public T Element;
 
-            public Cell(int sequence, object element)
+            public Cell(int sequence, T element)
             {
                 Sequence = sequence;
                 Element = element;
