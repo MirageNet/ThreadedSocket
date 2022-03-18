@@ -1,4 +1,4 @@
-﻿using Mirage.SocketLayer;
+using Mirage.SocketLayer;
 
 namespace Mirage.ThreadedSocket
 {
@@ -7,14 +7,16 @@ namespace Mirage.ThreadedSocket
         public SocketFactory Inner;
         public int BufferSize;
 
+        public override int MaxPacketSize => Inner.MaxPacketSize;
+
         public override ISocket CreateClientSocket()
         {
-            return new MultiThreadSocket(Inner.CreateClientSocket(), BufferSize);
+            return new MultiThreadSocket(Inner.CreateClientSocket(), BufferSize, Inner.MaxPacketSize);
         }
 
         public override ISocket CreateServerSocket()
         {
-            return new MultiThreadSocket(Inner.CreateServerSocket(), BufferSize);
+            return new MultiThreadSocket(Inner.CreateServerSocket(), BufferSize, Inner.MaxPacketSize);
         }
 
         public override IEndPoint GetBindEndPoint()

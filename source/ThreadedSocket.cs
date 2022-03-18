@@ -9,6 +9,7 @@ namespace Mirage.ThreadedSocket
     public class MultiThreadSocket : ISocket
     {
         readonly ISocket _socket;
+        readonly int maxPacketSize;
         readonly ConcurrentBuffer _receiveBuffer;
         readonly ConcurrentBuffer _bufferPool;
         Thread _receiveThread;
@@ -16,9 +17,10 @@ namespace Mirage.ThreadedSocket
 
         Packet next;
 
-        public MultiThreadSocket(ISocket socket, int bufferSize)
+        public MultiThreadSocket(ISocket socket, int bufferSize, int maxPacketSize)
         {
             _socket = socket;
+            this.maxPacketSize = maxPacketSize;
             _receiveBuffer = new ConcurrentBuffer(bufferSize);
             _bufferPool = new ConcurrentBuffer(bufferSize);
         }
@@ -109,8 +111,7 @@ namespace Mirage.ThreadedSocket
             if (hasBuffer)
                 buffer = (byte[])objBuffer;
             else
-                // todo get real MTU size here
-                buffer = new byte[1300];
+                buffer = new byte[maxPacketSize];
 
             int size = _socket.Receive(buffer, out IEndPoint endPoint);
 #if UNITY_ASSERTIONS
