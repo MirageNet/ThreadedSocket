@@ -48,6 +48,7 @@ namespace NetStack.Threading
             _dequeuePosition = 0;
         }
 
+        /// <summary>Queues item, blocks thread if buffer is full</summary>
         public void Enqueue(T item)
         {
             while (true)
@@ -59,6 +60,7 @@ namespace NetStack.Threading
             }
         }
 
+        /// <summary>Queues item, returns false if buffer is full</summary>
         public bool TryEnqueue(T item)
         {
             do
@@ -89,6 +91,7 @@ namespace NetStack.Threading
             while (true);
         }
 
+        /// <summary>Dequeues item, blocks thread if buffer empty</summary>
         public T Dequeue()
         {
             while (true)
@@ -100,6 +103,7 @@ namespace NetStack.Threading
             }
         }
 
+        /// <summary>Dequeues item, returns false if buffer empty</summary>
         public bool TryDequeue(out T result)
         {
             do
